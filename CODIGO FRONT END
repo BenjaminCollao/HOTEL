@@ -1,3 +1,4 @@
+import requests
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -5,6 +6,7 @@ from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.popup import Popup
 
 class InicioScreen(Screen):
     def __init__(self, **kwargs):
@@ -57,7 +59,25 @@ class RegistroScreen(Screen):
         self.add_widget(layout)
 
     def registrar_usuario(self, instance):
-        print(f"Usuario registrado: {self.nombre_apellido.text}, {self.correo.text}")
+        data = {
+            "nombre": self.nombre_apellido.text,
+            "correo": self.correo.text,
+            "contrasena": self.contrasena.text
+        }
+        try:
+            response = requests.post("http://localhost:5000/registro", json=data)
+            mensaje = response.json().get("mensaje", "Error")
+            self.mostrar_popup("Registro", mensaje)
+            if response.status_code == 201:
+                self.manager.current = 'login'
+        except Exception as e:
+            self.mostrar_popup("Error", str(e))
+
+    def mostrar_popup(self, titulo, mensaje):
+        popup = Popup(title=titulo,
+                      content=Label(text=mensaje),
+                      size_hint=(None, None), size=(300, 200))
+        popup.open()
 
     def volver_inicio(self, instance):
         self.manager.current = 'inicio'
@@ -88,7 +108,24 @@ class LoginScreen(Screen):
         self.add_widget(layout)
 
     def go_to_fecha(self, instance):
-        self.manager.current = 'fecha'
+        data = {
+            "correo": self.correo.text,
+            "contrasena": self.contrasena.text
+        }
+        try:
+            response = requests.post("http://localhost:5000/login", json=data)
+            mensaje = response.json().get("mensaje", "Error")
+            self.mostrar_popup("Login", mensaje)
+            if response.status_code == 200:
+                self.manager.current = 'fecha'
+        except Exception as e:
+            self.mostrar_popup("Error", str(e))
+
+    def mostrar_popup(self, titulo, mensaje):
+        popup = Popup(title=titulo,
+                      content=Label(text=mensaje),
+                      size_hint=(None, None), size=(300, 200))
+        popup.open()
 
     def volver_inicio(self, instance):
         self.manager.current = 'inicio'
@@ -125,19 +162,27 @@ class ResultadosScreen(Screen):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='horizontal', padding=20, spacing=10)
 
-        self.img_habitacion = Image(source="habitacion.jpg", size_hint=(None, None), size=(150, 150))
-        layout.add_widget(self.img_habitacion)
+        try:
+            response = requests.get("http://localhost:5000/habitaciones")
+            data = response.json()
+            habitacion = data[0] if data else {}
 
-        info_layout = BoxLayout(orientation='vertical', spacing=10)
-        info_layout.add_widget(Label(text="Habitación: 203"))
-        info_layout.add_widget(Label(text="Camas: 2"))
-        info_layout.add_widget(Label(text="Precio por noche: $50"))
+            self.img_habitacion = Image(source="habitacion.jpg", size_hint=(None, None), size=(150, 150))
+            layout.add_widget(self.img_habitacion)
 
-        btn_detalles = Button(text="DETALLES", size_hint=(None, None), size=(100, 40))
-        btn_detalles.bind(on_press=self.go_to_detalles)
-        info_layout.add_widget(btn_detalles)
+            info_layout = BoxLayout(orientation='vertical', spacing=10)
+            info_layout.add_widget(Label(text=f"Habitación: {habitacion.get('id', '---')}"))
+            info_layout.add_widget(Label(text=f"Camas: {habitacion.get('camas', '---')}"))
+            info_layout.add_widget(Label(text=f"Precio: ${habitacion.get('precio', '---')}"))
 
-        layout.add_widget(info_layout)
+            btn_detalles = Button(text="DETALLES", size_hint=(None, None), size=(100, 40))
+            btn_detalles.bind(on_press=self.go_to_detalles)
+            info_layout.add_widget(btn_detalles)
+
+            layout.add_widget(info_layout)
+
+        except Exception as e:
+            layout.add_widget(Label(text=f"Error cargando habitación: {e}"))
 
         btn_volver = Button(text="Volver", size_hint=(None, None), size=(100, 40))
         btn_volver.bind(on_press=self.volver_fecha)
@@ -151,24 +196,6 @@ class ResultadosScreen(Screen):
     def volver_fecha(self, instance):
         self.manager.current = 'fecha'
 
-class DetallesScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
-        layout.add_widget(Label(text="Detalles de la habitación"))
-        layout.add_widget(Label(text="Habitación 203 - Dos camas individuales"))
-        layout.add_widget(Label(text="Precio por noche: $50"))
-        layout.add_widget(Label(text="Servicios: WiFi, TV, Aire Acondicionado"))
-
-        btn_volver = Button(text="Volver", size_hint=(None, None), size=(100, 40))
-        btn_volver.bind(on_press=self.volver_resultados)
-        layout.add_widget(btn_volver)
-
-        self.add_widget(layout)
-
-    def volver_resultados(self, instance):
-        self.manager.current = 'resultados'
-
 class HotelApp(App):
     def build(self):
         sm = ScreenManager()
@@ -177,7 +204,6 @@ class HotelApp(App):
         sm.add_widget(LoginScreen(name='login'))
         sm.add_widget(FechaScreen(name='fecha'))
         sm.add_widget(ResultadosScreen(name='resultados'))
-        sm.add_widget(DetallesScreen(name='detalles'))  # <-- se agregó esta pantalla
         return sm
 
 if __name__ == '__main__':
