@@ -1,0 +1,63 @@
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)  # Permitir acceso desde Kivy
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hotel.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+class Usuario(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), nullable=False)
+    correo = db.Column(db.String(100), unique=True, nullable=False)
+    contrasena = db.Column(db.String(100), nullable=False)
+
+class Habitacion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    camas = db.Column(db.Integer, nullable=False)
+    precio = db.Column(db.Float, nullable=False)
+
+@app.before_first_request
+def crear_tablas():
+    db.create_all()
+    if not Habitacion.query.first():
+        h1 = Habitacion(camas=2, precio=50.0)
+        db.session.add(h1)
+        db.session.commit()
+
+@app.route('/registro', methods=['POST'])
+def registrar():
+    data = request.json
+    if Usuario.query.filter_by(correo=data['correo']).first():
+        return jsonify({'mensaje': 'Correo ya registrado'}), 400
+    nuevo_usuario = Usuario(
+        nombre=data['nombre'],
+        correo=data['correo'],
+        contrasena=data['contrasena']
+    )
+    db.session.add(nuevo_usuario)
+    db.session.commit()
+    return jsonify({'mensaje': 'Usuario registrado exitosamente'}), 201
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    usuario = Usuario.query.filter_by(correo=data['correo'], contrasena=data['contrasena']).first()
+    if usuario:
+        return jsonify({'mensaje': 'Inicio de sesión exitoso'}), 200
+    else:
+        return jsonify({'mensaje': 'Credenciales incorrectas'}), 401
+
+@app.route('/habitaciones', methods=['GET'])
+def habitaciones():
+    habitaciones = Habitacion.query.all()
+    resultado = [
+        {'id': h.id, 'camas': h.camas, 'precio': h.precio} for h in habitaciones
+    ]
+    return jsonify(resultado)
+
+if __name__ == '__main__':
+    app.run(debug=True)
