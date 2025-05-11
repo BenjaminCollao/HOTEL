@@ -1,4 +1,3 @@
-import qrcode
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -152,6 +151,24 @@ class ResultadosScreen(Screen):
     def volver_fecha(self, instance):
         self.manager.current = 'fecha'
 
+class DetallesScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        layout.add_widget(Label(text="Detalles de la habitación"))
+        layout.add_widget(Label(text="Habitación 203 - Dos camas individuales"))
+        layout.add_widget(Label(text="Precio por noche: $50"))
+        layout.add_widget(Label(text="Servicios: WiFi, TV, Aire Acondicionado"))
+
+        btn_volver = Button(text="Volver", size_hint=(None, None), size=(100, 40))
+        btn_volver.bind(on_press=self.volver_resultados)
+        layout.add_widget(btn_volver)
+
+        self.add_widget(layout)
+
+    def volver_resultados(self, instance):
+        self.manager.current = 'resultados'
+
 class HotelApp(App):
     def build(self):
         sm = ScreenManager()
@@ -160,6 +177,7 @@ class HotelApp(App):
         sm.add_widget(LoginScreen(name='login'))
         sm.add_widget(FechaScreen(name='fecha'))
         sm.add_widget(ResultadosScreen(name='resultados'))
+        sm.add_widget(DetallesScreen(name='detalles'))  # <-- se agregó esta pantalla
         return sm
 
 if __name__ == '__main__':
