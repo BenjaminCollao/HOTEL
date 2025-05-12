@@ -20,8 +20,7 @@ class Habitacion(db.Model):
     camas = db.Column(db.Integer, nullable=False)
     precio = db.Column(db.Float, nullable=False)
 
-@app.before_first_request
-def crear_tablas():
+with app.app_context():
     db.create_all()
     if not Habitacion.query.first():
         h1 = Habitacion(camas=2, precio=50.0)
