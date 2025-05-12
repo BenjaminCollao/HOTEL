@@ -1,0 +1,290 @@
+import requests
+from kivy.uix.image import Image
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.textinput import TextInput
+from kivy.uix.popup import Popup
+from kivy.utils import get_color_from_hex
+from datetime import datetime, date
+import calendar
+import re  # Para validación de correo electrónico
+from kivy.uix.scrollview import ScrollView # Importa ScrollView
+
+class InicioScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        logo = Label(text="LOGO AQUÍ", font_size=24)
+        layout.add_widget(logo)
+        btn_login = Button(text='Iniciar sesión', size_hint=(None, None), size=(200, 50))
+        btn_login.bind(on_press=self.go_to_login)
+        layout.add_widget(btn_login)
+        btn_register = Button(text='Registrarse', size_hint=(None, None), size=(200, 50))
+        btn_register.bind(on_press=self.go_to_register)
+        layout.add_widget(btn_register)
+        self.add_widget(layout)
+    def go_to_register(self, instance):
+        self.manager.current = 'registro'
+    def go_to_login(self, instance):
+        self.manager.current = 'login'
+
+class RegistroScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        layout.add_widget(Label(text="Nombre y Apellido"))
+        self.nombre_apellido = TextInput()
+        layout.add_widget(self.nombre_apellido)
+        layout.add_widget(Label(text="Correo Electrónico"))
+        self.correo = TextInput()
+        layout.add_widget(self.correo)
+        layout.add_widget(Label(text="Contraseña"))
+        self.contrasena = TextInput(password=True)
+        layout.add_widget(self.contrasena)
+        btn_registrar = Button(text="REGISTRAR", size_hint=(None, None), size=(200, 50))
+        btn_registrar.bind(on_press=self.registrar_usuario)
+        layout.add_widget(btn_registrar)
+        btn_volver = Button(text="Volver", size_hint=(None, None), size=(100, 40))
+        btn_volver.bind(on_press=self.volver_inicio)
+        layout.add_widget(btn_volver)
+        self.add_widget(layout)
+    def es_correo_valido(self, correo):
+        patron = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        return re.match(patron, correo)
+    def registrar_usuario(self, instance):
+        nombre = self.nombre_apellido.text
+        correo = self.correo.text
+        contrasena = self.contrasena.text
+        if not nombre or not correo or not contrasena:
+            self.mostrar_popup("Error", "Todos los campos son obligatorios.")
+            return
+        if not self.es_correo_valido(correo):
+            self.mostrar_popup("Error", "Formato de correo electrónico inválido.")
+            return
+        data = {
+            "nombre": nombre,
+            "correo": correo,
+            "contrasena": contrasena
+        }
+        try:
+            response = requests.post("http://localhost:5000/registro", json=data)
+            mensaje = response.json().get("mensaje", "Error")
+            self.mostrar_popup("Registro", mensaje)
+            if response.status_code == 201:
+                self.manager.current = 'login'
+        except requests.exceptions.ConnectionError:
+            self.mostrar_popup("Error de Conexión", "No se pudo conectar con el servidor.")
+        except Exception as e:
+            self.mostrar_popup("Error", str(e))
+    def mostrar_popup(self, titulo, mensaje):
+        popup = Popup(title=titulo,
+                            content=Label(text=mensaje),
+                            size_hint=(None, None), size=(300, 200))
+        popup.open()
+    def volver_inicio(self, instance):
+        self.manager.current = 'inicio'
+
+class LoginScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        layout.add_widget(Label(text="Correo Electrónico"))
+        self.correo = TextInput()
+        layout.add_widget(self.correo)
+        layout.add_widget(Label(text="Contraseña"))
+        self.contrasena = TextInput(password=True)
+        layout.add_widget(self.contrasena)
+        btn_iniciar = Button(text="INICIAR", size_hint=(None, None), size=(200, 50))
+        btn_iniciar.bind(on_press=self.intentar_login)
+        layout.add_widget(btn_iniciar)
+        layout.add_widget(Label(text="[u]Recuperar contraseña[/u]", markup=True, font_size=12))
+        btn_volver = Button(text="Volver", size_hint=(None, None), size=(100, 40))
+        btn_volver.bind(on_press=self.volver_inicio)
+        layout.add_widget(btn_volver)
+        self.add_widget(layout)
+    def intentar_login(self, instance):
+        correo = self.correo.text
+        contrasena = self.contrasena.text
+        if not correo or not contrasena:
+            self.mostrar_popup("Error", "Correo y contraseña son obligatorios.")
+            return
+        data = {
+            "correo": correo,
+            "contrasena": contrasena
+        }
+        try:
+            response = requests.post("http://localhost:5000/login", json=data)
+            mensaje = response.json().get("mensaje", "Error")
+            if response.status_code == 200:
+                self.mostrar_popup("Inicio de Sesión", mensaje)
+                self.manager.current = 'fecha'
+            elif response.status_code == 401:
+                self.mostrar_popup_error_login("Error de Inicio de Sesión", mensaje)
+            else:
+                self.mostrar_popup("Error", mensaje)
+        except requests.exceptions.ConnectionError:
+            self.mostrar_popup("Error de Conexión", "No se pudo conectar con el servidor.")
+        except Exception as e:
+            self.mostrar_popup("Error", str(e))
+    def mostrar_popup(self, titulo, mensaje):
+        popup = Popup(title=titulo,
+                            content=Label(text=mensaje),
+                            size_hint=(None, None), size=(300, 200))
+        popup.open()
+    def mostrar_popup_error_login(self, titulo, mensaje):
+        popup = Popup(title=titulo,
+                            content=Label(text=mensaje),
+                            size_hint=(None, None), size=(300, 200),
+                            auto_dismiss=True)
+        popup.open()
+    def volver_inicio(self, instance):
+        self.manager.current = 'inicio'
+
+class MonthCalendar(GridLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cols = 7
+        self.selected_date = None
+        self.month = datetime.now().month
+        self.year = datetime.now().year
+        self.padding = 10
+        self.spacing = 5
+        self.draw_calendar()
+    def draw_calendar(self):
+        self.clear_widgets()
+        days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+        for day in days:
+            self.add_widget(Label(text=day, color=get_color_from_hex('#AAAAAA')))
+        first_day, num_days = calendar.monthrange(self.year, self.month)
+        padding = first_day
+        for _ in range(padding):
+            self.add_widget(Label(text=''))
+        for day in range(1, num_days + 1):
+            date_obj = date(self.year, self.month, day)
+            btn_day = Button(text=str(day), on_press=self.select_date, background_color=(1, 1, 1, 1))
+            btn_day.date_obj = date_obj
+            if self.selected_date == date_obj:
+                btn_day.background_color = get_color_from_hex('#ADD8E6')
+            self.add_widget(btn_day)
+    def select_date(self, instance):
+        if self.selected_date:
+            for child in self.children:
+                if isinstance(child, Button) and hasattr(child, 'date_obj') and child.date_obj == self.selected_date:
+                    child.background_color = (1, 1, 1, 1)
+                    break
+        self.selected_date = instance.date_obj
+        instance.background_color = get_color_from_hex('#ADD8E6')
+        print(f"Fecha seleccionada: {self.selected_date}")
+
+class FechaScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        self.label_entrada = Label(text="Fecha de Llegada:")
+        layout.add_widget(self.label_entrada)
+        self.calendar_entrada = MonthCalendar(size_hint_y=None, height=200)
+        layout.add_widget(self.calendar_entrada)
+        self.label_salida = Label(text="Fecha de Salida:")
+        layout.add_widget(self.label_salida)
+        self.calendar_salida = MonthCalendar(size_hint_y=None, height=200)
+        layout.add_widget(self.calendar_salida)
+        btn_buscar = Button(text="BUSCAR", size_hint=(None, None), size=(150, 40))
+        btn_buscar.bind(on_press=self.buscar_habitaciones)
+        layout.add_widget(btn_buscar)
+        btn_volver = Button(text="Volver", size_hint=(None, None), size=(100, 40))
+        btn_volver.bind(on_press=self.volver_inicio)
+        layout.add_widget(btn_volver)
+        self.add_widget(layout)
+    def buscar_habitaciones(self, instance):
+        fecha_entrada = self.calendar_entrada.selected_date
+        fecha_salida = self.calendar_salida.selected_date
+        print(f"Buscar habitaciones desde: {fecha_entrada} hasta: {fecha_salida}")
+        self.manager.current = 'resultados'
+    def volver_inicio(self, instance):
+        self.manager.current = 'inicio'
+
+class DetallesScreen(Screen):
+    def __init__(self, habitacion_data=None, **kwargs):
+        super().__init__(**kwargs)
+        self.habitacion_data = habitacion_data
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+
+        # Imagen principal (más grande)
+        self.img_principal = Image(source="habitacion_detalle_1.jpg", size_hint_y=None, height=300)
+        layout.add_widget(self.img_principal)
+
+        # Layout para las imágenes pequeñas
+        imagenes_pequenas_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=None, height=100)
+        imagenes_pequenas_layout.add_widget(Image(source="habitacion_detalle_2.jpg"))
+        imagenes_pequenas_layout.add_widget(Image(source="habitacion_detalle_3.jpg"))
+        imagenes_pequenas_layout.add_widget(Image(source="habitacion_detalle_4.jpg"))
+        layout.add_widget(imagenes_pequenas_layout)
+
+        # Detalles específicos de la habitación
+        if self.habitacion_data:
+            detalles_layout = BoxLayout(orientation='vertical', spacing=5)
+            detalles_layout.add_widget(Label(text=f"ID: {self.habitacion_data.get('id', 'N/A')}"))
+            detalles_layout.add_widget(Label(text=f"Camas: {self.habitacion_data.get('camas', 'N/A')}"))
+            detalles_layout.add_widget(Label(text=f"Precio por noche: ${self.habitacion_data.get('precio', 'N/A')}"))
+            detalles_layout.add_widget(Label(text=f"Descripción: {self.habitacion_data.get('descripcion', 'N/A')}")) # Asumiendo que el backend devuelve una descripción
+            layout.add_widget(detalles_layout)
+        else:
+            layout.add_widget(Label(text="No se encontraron detalles de la habitación."))
+
+        btn_volver = Button(text="Volver", on_press=self.volver_resultados)
+        layout.add_widget(btn_volver)
+
+        self.add_widget(layout)
+
+    def volver_resultados(self, instance):
+        self.manager.current = 'resultados'
+
+class ResultadosScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.habitaciones_data = [] # Almacenar la información de las habitaciones
+        layout = BoxLayout(orientation='horizontal', padding=20, spacing=10)
+        self.resultados_layout = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None) # Layout para las habitaciones
+        self.scroll_view = ScrollView()
+        self.scroll_view.add_widget(self.resultados_layout)
+        layout.add_widget(self.scroll_view)
+
+        btn_volver = Button(text="Volver", size_hint_y=None, height=40)
+        btn_volver.bind(on_press=self.volver_fecha)
+        layout.add_widget(btn_volver)
+
+        self.add_widget(layout)
+        self.cargar_habitaciones()
+
+    def cargar_habitaciones(self):
+        self.resultados_layout.clear_widgets()
+        try:
+            response = requests.get("http://localhost:5000/habitaciones")
+            self.habitaciones_data = response.json()
+            if self.habitaciones_data:
+                for habitacion in self.habitaciones_data:
+                    habitacion_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=None, height=150)
+                    img_habitacion = Image(source="habitacion.jpg", size_hint=(None, None), size=(150, 150))
+                    habitacion_layout.add_widget(img_habitacion)
+                    info_layout = BoxLayout(orientation='vertical', spacing=5)
+                    info_layout.add_widget(Label(text=f"Habitación: {habitacion.get('id', '---')}"))
+                    info_layout.add_widget(Label(text=f"Camas: {habitacion.get('camas', '---')}"))
+                    info_layout.add_widget(Label(text=f"Precio: ${habitacion.get('precio', '---')}"))
+                    btn_detalles = Button(text="DETALLES", size_hint=(None, None), size=(100, 30))
+                    btn_detalles.bind(on_press=self.mostrar_detalles)
+                    btn_detalles.habitacion_id = habitacion.get('id') # Almacenar el ID de la habitación
+                    info_layout.add_widget(btn_detalles)
+                    habitacion_layout.add_widget(info_layout)
+                    self.resultados_layout.add_widget(habitacion_layout)
+            else:
+                self.resultados_layout.add_widget(Label(text="No se encontraron habitaciones disponibles."))
+        except requests.exceptions.ConnectionError:
+            self.resultados_layout.add_widget(Label(text="Error al conectar con el servidor."))
+        except Exception as e:
+            self.resultados_layout.add_widget(Label(text=f"Error cargando habitaciones: {e}"))
+
+    def
